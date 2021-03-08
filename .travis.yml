@@ -1,0 +1,29 @@
+services:
+  - docker
+env:
+  global:
+    - SHA=$(git rev-parse HEAD) # set current commit GIT_SHA
+    - CLOUDSDK_CORE_DISABLE_PROMPTS=1 # Disable prompt during google.cloud configuration
+before_install:
+  - openssl aes-256-cbc -K $encrypted_7e3257362a8d_key -iv $encrypted_7e3257362a8d_iv -in ka.json.enc -out ka.json -d # decrypt encrypted file for google.cloud auth
+  - curl https://sdk.cloud.google.com | bash > /dev/null; # download google.cloud/sdk
+  - source $HOME/google-cloud-sdk/path.bash.inc # apply custom config to travis config
+  - gcloud components update kubectl # update kubectl
+  - gcloud auth activate-service-account --key-file ka.json # auth to google.cloud
+  - gcloud config set project mk8s-0001 # set project _name_ (already create on https://cloud.google.com)
+  - gcloud config set compute/zone us-central1-c # set project _zone_ (already create on https://cloud.google.com)
+  - gcloud container clusters get-credentials mk-cluster # set project _cluster_ (already create on https://cloud.google.com)
+  - echo "$DOCKER_PASSWORD" | docker login -u "$DOCKER_USERNAME" --password-stdin # docker auth (env variable set on https://travis-ci.com)
+  
+  - docker build -t ntdash/react-test -f ./client/Dockerfile.dev ./client  # build the test image
+
+script:
+  - docker run -e CI=true ntdash/react-test npm run test -- --coverage # run test
+
+# after_success:
+
+deploy:
+  provider: script
+  script: bash ./deploy.sh
+  on:
+    branch: main
